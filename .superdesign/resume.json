@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/conversations/start": {
+      "targetKind": "new-ui",
+      "projectId": "c8930a7f-3b28-4fbc-a5bb-3939d2a66c0a",
+      "activeDraftId": "38509df9-1d38-4d9e-ab9b-9164b0482749",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": [
+        "0e180131-3e60-4904-8aa7-0fb5cbea5313",
+        "public-kenzo_waving.png"
+      ],
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "app/globals.css"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "865eb5b5a2a9da04a7a650f72bc2a1f6d47899235cde6cb01a8e3d2f290955d7",
+        "app/globals.css": "769edf77bd0d101a2d26e6c5656defba8cd885ff37d92279fa293a2756fe5651"
+      },
+      "components": [],
+      "drafts": {
+        "38509df9-1d38-4d9e-ab9b-9164b0482749": {
+          "title": "Start Conversation",
+          "visualDirection": "faithful supplied-reference reproduction",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-08-29T14:41:53+05:00"
+    },
+    "/conversations/[conversationId]": {
+      "targetKind": "new-ui",
+      "projectId": "c8930a7f-3b28-4fbc-a5bb-3939d2a66c0a",
+      "activeDraftId": "89bbd4f6-dc47-435d-810c-9bdc204872d1",
+      "sourceTarget": "/conversations/start",
+      "sourceDraftId": "38509df9-1d38-4d9e-ab9b-9164b0482749",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": [
+        "public-kenzo_waving.png",
+        "public-kenzo_taking_user_input.png",
+        "public-kenzo_genereating_response.png"
+      ],
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "app/globals.css",
+        "components/start/StartScreen.tsx",
+        "components/start/KenzoGreeting.tsx",
+        "components/start/StartForm.tsx"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "b48bfca8d399ff93b500d2f3aa8297f0c0b6a25b20ecfd5dc5b2c28139ab5cb7",
+        "app/globals.css": "1eecd8073149314d963df8b647d165820530ef3aefccf3864dcbf979d86f8914",
+        "components/start/StartScreen.tsx": "94505b1452882a4f58ea65328a8111081867ec7bfa4cc1b0a6349856b5c76130",
+        "components/start/KenzoGreeting.tsx": "c8ef7032cec0059c4ffdb9b0b6d2096c7677ff8f510adabbcc8e17261cb79bbe",
+        "components/start/StartForm.tsx": "e3796578380145d33bd0792e8e6c6f5e8febe376f41db8d79fef03dd10efe82a"
+      },
+      "components": [],
+      "drafts": {
+        "89bbd4f6-dc47-435d-810c-9bdc204872d1": {
+          "title": "Qualification Conversation Workspace",
+          "visualDirection": "metric-based continuation of the BookingFunnel start screen",
+          "parentDraftId": "38509df9-1d38-4d9e-ab9b-9164b0482749",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-08-29T16:19:25+05:00"
+    }
+  }
+}
