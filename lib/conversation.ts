@@ -1,314 +1,168 @@
-import {
-  isConversationAction,
-  isConversationResponse,
-  isRecord,
-} from "@/lib/helpers";
-import type {
-  ConversationAction,
-  ConversationUiMessage,
-  ConversationUiState,
-  MessageDeliveryStatus,
-  PendingConversationInteraction,
-  SendConversationMessageRequest,
-} from "@/types/types";
+import { interpretDirectives } from "@/lib/ui-directives";
+import { isConversationResponse, isRecord, isUIDirective } from "@/lib/helpers";
+import type { ConversationAction, ConversationUiMessage, ConversationUiState, Interaction } from "@/types/types";
 
-const conversationUiStorageVersion = 1;
-
+const storageVersion = 7;
 export const conversationActionLabels: Record<ConversationAction, string> = {
-  accept_pursuit: "Discuss this with Kenzo",
-  decline_pursuit: "Keep my current preference",
-  accept_pursuit_threshold: "Accept the preferred target",
-  keep_pursuit_preference: "Keep my latest preference",
+  repeat_question: "Repeat question",
+  explain_question: "Explain question",
+  accept_pursuit: "I'm open to discussing it",
+  decline_pursuit: "Prefer to continue as-is",
+  accept_pursuit_threshold: "Accept the proposed value",
+  keep_pursuit_preference: "Keep my current preference",
   continue_pursuit: "Continue discussing",
 };
 
-let fallbackMessageId = 0;
-
 export function createConversationMessageId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  fallbackMessageId += 1;
-  return `message-${Date.now()}-${fallbackMessageId}`;
+  return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`;
 }
-
 export function formatMetricLabel(metric: string): string {
-  return metric
-    .split("_")
-    .filter(Boolean)
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join(" ");
+  return metric.replace(/[_-]+/g, " ").replace(/\b\w/g, word => word.toUpperCase());
 }
-
 export function getRemainingQuestionLabel(count: number): string {
-  return count === 1 ? "1 question left" : `${count} questions left`;
+  return `${count} question${count === 1 ? "" : "s"} remaining`;
 }
-
 export function getMetricSectionId(metric: string): string {
-  const normalizedMetric = metric.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  return `metric-section-${normalizedMetric}`;
+  return `metric-${encodeURIComponent(metric)}`;
+}
+export function getRequestDisplayContent(request: Interaction): string {
+  if (request.type === "action") return conversationActionLabels[request.action];
+  if (request.type === "structured_answer") return typeof request.value === "boolean"
+    ? request.value ? "Yes" : "No" : String(request.value);
+  return request.message;
+}
+export function draftKey(request: Interaction): string | null {
+  if (request.type === "metric_text" || request.type === "structured_answer") return `metric:${request.metric}`;
+  if (request.type === "ask_kenzo" || request.type === "general_text") return request.type;
+  return null;
 }
 
-function createAssistantMessage(content: string): ConversationUiMessage {
-  return {
-    id: createConversationMessageId(),
-    role: "assistant",
-    content,
-  };
+export function createInitialConversationUiState(conversation: ConversationUiState["conversation"]): ConversationUiState {
+  return applyConversationResponse({
+    conversation, blocks: [], terminalMessages: [], askMessages: [], generalMessages: [], drafts: {},
+  }, conversation);
+}
+export function setMetricExpanded(state: ConversationUiState, metric: string, isExpanded: boolean): ConversationUiState {
+  return { ...state, blocks: state.blocks.map(block => block.metric === metric ? { ...block, isExpanded } : block) };
 }
 
-export function createInitialConversationUiState(
-  conversation: ConversationUiState["conversation"],
-): ConversationUiState {
-  const initialMessage = createAssistantMessage(conversation.response);
-
-  if (conversation.current_metric === null) {
-    return {
-      conversation,
-      blocks: [],
-      terminalMessages: [initialMessage],
-    };
-  }
-
-  return {
-    conversation,
-    blocks: [
-      {
-        metric: conversation.current_metric,
-        messages: [initialMessage],
-        isExpanded: true,
-      },
-    ],
-    terminalMessages: [],
-  };
-}
-
-export function setMetricExpanded(
-  state: ConversationUiState,
-  metric: string,
-  isExpanded: boolean,
-): ConversationUiState {
-  return {
-    ...state,
-    blocks: state.blocks.map((block) =>
-      block.metric === metric ? { ...block, isExpanded } : block,
-    ),
-  };
-}
-
-export function appendPendingInteraction(
-  state: ConversationUiState,
-  interaction: PendingConversationInteraction,
-  displayContent: string,
-): ConversationUiState {
-  if (!interaction.owningMetric || !interaction.messageId) {
-    return state;
-  }
-
-  const action = "message" in interaction.request
-    ? undefined
-    : interaction.request.action;
-  const pendingMessage: ConversationUiMessage = {
-    id: interaction.messageId,
-    role: "user",
-    content: displayContent,
-    action,
-    deliveryStatus: "sending",
-  };
-
-  return {
-    ...state,
-    blocks: state.blocks.map((block) =>
-      block.metric === interaction.owningMetric
-        ? {
-            ...block,
-            isExpanded: true,
-            messages: [...block.messages, pendingMessage],
-          }
-        : block,
-    ),
-  };
-}
-
-export function updateMessageDelivery(
-  state: ConversationUiState,
-  messageId: string | null,
-  deliveryStatus: MessageDeliveryStatus,
-): ConversationUiState {
-  if (!messageId) {
-    return state;
-  }
-
-  return {
-    ...state,
-    blocks: state.blocks.map((block) => ({
-      ...block,
-      messages: block.messages.map((message) =>
-        message.id === messageId ? { ...message, deliveryStatus } : message,
-      ),
-    })),
-  };
-}
-
+/** Apply one acknowledged interaction atomically. Local history records submissions, not accepted answers. */
 export function applyConversationResponse(
   state: ConversationUiState,
   response: ConversationUiState["conversation"],
-  pendingMessageId: string | null,
+  interaction?: Interaction,
 ): ConversationUiState {
-  const stateWithDeliveredMessage = updateMessageDelivery(
-    state,
-    pendingMessageId,
-    "sent",
-  );
-  const assistantMessage = createAssistantMessage(response.response);
-
-  if (response.current_metric === null) {
-    return {
-      ...stateWithDeliveredMessage,
-      conversation: response,
-      terminalMessages: [
-        ...stateWithDeliveredMessage.terminalMessages,
-        assistantMessage,
-      ],
-    };
-  }
-
-  const existingBlockIndex = stateWithDeliveredMessage.blocks.findIndex(
-    (block) => block.metric === response.current_metric,
-  );
-
-  if (existingBlockIndex === -1) {
-    return {
-      ...stateWithDeliveredMessage,
-      conversation: response,
-      blocks: [
-        ...stateWithDeliveredMessage.blocks.map((block) => ({
-          ...block,
-          isExpanded: false,
-        })),
-        {
-          metric: response.current_metric,
-          messages: [assistantMessage],
-          isExpanded: true,
-        },
-      ],
-    };
-  }
-
-  return {
-    ...stateWithDeliveredMessage,
-    conversation: response,
-    blocks: stateWithDeliveredMessage.blocks.map((block, index) =>
-      index === existingBlockIndex
-        ? {
-            ...block,
-            isExpanded: true,
-            messages: [...block.messages, assistantMessage],
-          }
-        : { ...block, isExpanded: false },
-    ),
+  const conversation = response;
+  const view = interpretDirectives(conversation);
+  const blocks = state.blocks.map(block => ({ ...block, messages: [...block.messages] }));
+  const next: ConversationUiState = {
+    ...state, conversation, blocks, drafts: { ...state.drafts },
+    askMessages: [...state.askMessages], generalMessages: [...state.generalMessages],
+    terminalMessages: [...state.terminalMessages],
   };
-}
-
-function getConversationUiStorageKey(conversationId: string): string {
-  return `bookingfunnel.conversation-ui:${conversationId}`;
-}
-
-export function persistConversationUiState(
-  state: ConversationUiState,
-  storage: Storage,
-): void {
-  storage.setItem(
-    getConversationUiStorageKey(state.conversation.conversation_id),
-    JSON.stringify({
-      version: conversationUiStorageVersion,
-      state,
-    }),
-  );
-}
-
-function isDeliveryStatus(value: unknown): value is MessageDeliveryStatus {
-  return value === "sending" || value === "sent" || value === "failed";
-}
-
-function isUiMessage(value: unknown): value is ConversationUiMessage {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  const actionIsValid = value.action === undefined || isConversationAction(value.action);
-  const deliveryStatusIsValid =
-    value.deliveryStatus === undefined || isDeliveryStatus(value.deliveryStatus);
-
-  return (
-    typeof value.id === "string" &&
-    (value.role === "assistant" || value.role === "user") &&
-    typeof value.content === "string" &&
-    actionIsValid &&
-    deliveryStatusIsValid
-  );
-}
-
-function isConversationUiState(value: unknown): value is ConversationUiState {
-  if (!isRecord(value) || !isConversationResponse(value.conversation)) {
-    return false;
-  }
-
-  if (!Array.isArray(value.blocks) || !Array.isArray(value.terminalMessages)) {
-    return false;
-  }
-
-  const blocksAreValid = value.blocks.every((block) => {
-    if (!isRecord(block) || !Array.isArray(block.messages)) {
-      return false;
+  // Only actual questions, pursuits and current_metric establish observed blocks.
+  // focus/not-available directives never create a hypothetical metric.
+  const observe = (metric: string) => {
+    let block = blocks.find(item => item.metric === metric);
+    if (!block) {
+      block = { metric, messages: [], isExpanded: false };
+      blocks.push(block);
     }
-
-    return (
-      typeof block.metric === "string" &&
-      block.metric.length > 0 &&
-      typeof block.isExpanded === "boolean" &&
-      block.messages.every(isUiMessage)
-    );
-  });
-
-  return blocksAreValid && value.terminalMessages.every(isUiMessage);
-}
-
-export function loadConversationUiState(
-  conversationId: string,
-  storage: Storage,
-): ConversationUiState | null {
-  const serializedState = storage.getItem(
-    getConversationUiStorageKey(conversationId),
-  );
-
-  if (!serializedState) {
-    return null;
+    return block;
+  };
+  if (view.activeMetric) observe(view.activeMetric);
+  if (interaction) {
+    const source = "metric" in interaction && interaction.metric
+      ? blocks.find(block => block.metric === interaction.metric)?.messages
+      : interaction.type === "ask_kenzo" ? next.askMessages : next.generalMessages;
+    (source ?? next.generalMessages).push({
+      id: createConversationMessageId(), role: "user", content: getRequestDisplayContent(interaction),
+      deliveryStatus: "sent", ...(interaction.type === "action" ? { action: interaction.action } : {}),
+    });
+    const key = draftKey(interaction);
+    if (key) next.drafts[key] = "";
+    if (interaction.type === "structured_answer") next.drafts[`number:${interaction.metric}`] = "";
+  }
+  // Only the latest qualification response supplies actionable pursuit controls.
+  // A separate Ask Kenzo exchange does not dismiss the current qualification UI.
+  if (interaction?.type !== "ask_kenzo") {
+    for (const block of blocks) block.pursuit = undefined;
+  }
+  for (const directive of conversation.ui_directives) {
+    switch (directive.type) {
+      case "metric_question":
+        observe(directive.metric).question = directive;
+        observe(directive.metric).pursuit = undefined;
+        break;
+      case "pursuit_offer":
+      case "pursuit_decision":
+        observe(directive.metric).pursuit = directive;
+        break;
+    }
+  }
+  for (const block of blocks) {
+    if (view.terminal || block.metric !== view.activeMetric) block.pursuit = undefined;
+    // Keep the real current question visible even while focusing another observed metric.
+    if (block.metric === view.activeMetric || block.metric === view.focusMetric) block.isExpanded = true;
+    else if (state.conversation.current_metric !== view.activeMetric) block.isExpanded = false;
   }
 
+  if (response.response) {
+    const assistant: ConversationUiMessage = { id: createConversationMessageId(), role: "assistant", content: response.response };
+    let destination = next.generalMessages;
+    if (view.terminal) destination = next.terminalMessages;
+    else if (interaction?.type === "ask_kenzo") destination = next.askMessages;
+    else if (interaction?.type === "general_text") destination = next.generalMessages;
+    else {
+      const unavailable = conversation.ui_directives.some(d => d.type === "metric_not_available_yet");
+      const missingFocus = view.focusMetric && !blocks.some(block => block.metric === view.focusMetric);
+      if (!unavailable && !missingFocus) {
+        const target = view.focusMetric ?? (interaction && "metric" in interaction ? interaction.metric : null);
+        destination = blocks.find(block => block.metric === target)?.messages ?? next.generalMessages;
+      }
+    }
+    destination.push(assistant);
+  }
+  return next;
+}
+
+// Session-only cache, scoped to tenant and API. No server hydration endpoint exists.
+const memory = new Map<string, ConversationUiState>();
+function storageKey(conversationId: string) {
+  return `kenzo.v4:${process.env.NEXT_PUBLIC_API_BASE_URL}:${process.env.NEXT_PUBLIC_API_AGENCY_ID}:${process.env.NEXT_PUBLIC_API_SCHEMA_NAME}:${conversationId}`;
+}
+export function persistConversationUiState(state: ConversationUiState, storage?: Storage): boolean {
+  if (!state.conversation.conversation_id) return false;
+  const key = storageKey(state.conversation.conversation_id);
+  memory.set(key, state);
   try {
-    const parsedValue: unknown = JSON.parse(serializedState);
-
-    if (
-      !isRecord(parsedValue) ||
-      parsedValue.version !== conversationUiStorageVersion ||
-      !isConversationUiState(parsedValue.state) ||
-      parsedValue.state.conversation.conversation_id !== conversationId
-    ) {
-      return null;
-    }
-
-    return parsedValue.state;
-  } catch {
-    return null;
-  }
+    (storage ?? window.sessionStorage).setItem(key, JSON.stringify({ version: storageVersion, state }));
+    return true;
+  } catch { return false; }
 }
-
-export function getRequestDisplayContent(
-  request: SendConversationMessageRequest,
-): string {
-  return isConversationAction(request.action)
-    ? conversationActionLabels[request.action]
-    : request.message ?? "";
+function isMessage(value: unknown): boolean {
+  return isRecord(value) && typeof value.id === "string" && typeof value.content === "string" &&
+    (value.role === "user" || value.role === "assistant");
+}
+function isSession(value: unknown): value is ConversationUiState {
+  return isRecord(value) && isConversationResponse(value.conversation) &&
+    Array.isArray(value.blocks) && value.blocks.every(block => isRecord(block) &&
+      typeof block.metric === "string" && typeof block.isExpanded === "boolean" &&
+      (block.question === undefined || (isRecord(block.question) && block.question.type === "metric_question" && isUIDirective(block.question))) &&
+      (block.pursuit === undefined || (isRecord(block.pursuit) && block.pursuit.metric === block.metric &&
+        (block.pursuit.type === "pursuit_offer" || block.pursuit.type === "pursuit_decision") && isUIDirective(block.pursuit))) &&
+      Array.isArray(block.messages) && block.messages.every(isMessage)) &&
+    [value.askMessages, value.generalMessages, value.terminalMessages].every(messages => Array.isArray(messages) && messages.every(isMessage)) &&
+    isRecord(value.drafts) && Object.values(value.drafts).every(draft => typeof draft === "string") &&
+    (value.messagesClosed === undefined || typeof value.messagesClosed === "boolean");
+}
+export function loadConversationUiState(conversationId: string, storage?: Storage): ConversationUiState | null {
+  const key = storageKey(conversationId);
+  try {
+    const raw = (storage ?? window.sessionStorage).getItem(key);
+    const value: unknown = raw ? JSON.parse(raw) : null;
+    if (isRecord(value) && value.version === storageVersion && isSession(value.state) &&
+      value.state.conversation.conversation_id === conversationId) return value.state;
+  } catch { /* Browser storage can be unavailable; retain this tab's in-memory session. */ }
+  return memory.get(key) ?? null;
 }

@@ -1,8 +1,8 @@
 import Image from "next/image";
 
-export function KenzoTyping() {
+export function KenzoTyping({ label = "Kenzo is preparing a response…" }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3 px-1" role="status" aria-live="polite">
+    <div className="flex flex-wrap items-center gap-3 px-1" role="status" aria-live="polite">
       <Image
         src="/kenzo_genereating_response.png"
         alt=""
@@ -15,7 +15,7 @@ export function KenzoTyping() {
         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/65 [animation-delay:-0.1s]" />
         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/65" />
       </div>
-      <span className="sr-only">Kenzo is preparing a response.</span>
+      <span className="text-xs text-on-surface-variant">{label}</span>
     </div>
   );
 }

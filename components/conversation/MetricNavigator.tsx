@@ -8,7 +8,7 @@ interface MetricNavigatorProps {
 }
 
 function getLastUserResponse(block: MetricConversationBlock): string | null {
-  return [...block.messages].reverse().find((message) => message.role === "user")?.content ?? null;
+  return [...block.messages].reverse().find((message) => message.role === "user" && !message.action && message.deliveryStatus === "sent")?.content ?? null;
 }
 
 export function MetricNavigator({
@@ -17,7 +17,7 @@ export function MetricNavigator({
   onSelectMetric,
 }: MetricNavigatorProps) {
   return (
-    <aside className="hidden min-h-0 flex-col rounded-2xl border border-outline-variant/45 bg-surface-container-lowest/75 p-4 shadow-sm backdrop-blur-sm lg:flex">
+    <aside className="sticky top-6 hidden max-h-[calc(100svh-3rem)] min-h-0 flex-col rounded-2xl border border-outline-variant/45 bg-surface-container-lowest/75 p-4 shadow-sm backdrop-blur-sm lg:flex">
       <h2 className="px-2 text-xs font-bold uppercase tracking-[0.12em] text-on-surface-variant">
         Qualification sections
       </h2>
@@ -50,7 +50,7 @@ export function MetricNavigator({
                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 ) : (
                   <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="10" cy="10" r="4" />
                   </svg>
                 )}
               </span>
@@ -59,7 +59,7 @@ export function MetricNavigator({
                   {formatMetricLabel(block.metric)}
                 </span>
                 <span className="mt-0.5 block truncate text-xs text-on-surface-variant">
-                  {isActive ? "Current section" : latestResponse ?? "Earlier section"}
+                  {isActive ? "Current section" : latestResponse ?? "Open section"}
                 </span>
               </span>
             </button>

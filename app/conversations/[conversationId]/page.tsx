@@ -12,5 +12,5 @@ export default async function ConversationPage({
 }) {
   const { conversationId } = await params;
 
-  return <ConversationScreen conversationId={conversationId} />;
+  return <ConversationScreen key={conversationId} conversationId={conversationId} />;
 }

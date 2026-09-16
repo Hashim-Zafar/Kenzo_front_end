@@ -18,7 +18,7 @@ function MessageBubble({ message }: { message: ConversationUiMessage }) {
             className="h-10 w-auto object-contain"
           />
         </span>
-        <div className="max-w-[min(42rem,88%)] rounded-2xl rounded-tl-sm border border-outline-variant/25 bg-surface-container-low px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-on-surface sm:px-5">
+        <div className="min-w-0 [overflow-wrap:anywhere] max-w-[min(42rem,88%)] rounded-2xl rounded-tl-sm border border-outline-variant/25 bg-surface-container-low px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-on-surface sm:px-5">
           {message.content}
         </div>
       </div>
@@ -27,7 +27,7 @@ function MessageBubble({ message }: { message: ConversationUiMessage }) {
 
   return (
     <div className="flex flex-col items-end gap-1 pl-8 sm:pl-16">
-      <div className="max-w-[min(38rem,90%)] rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-on-primary sm:px-5">
+      <div className="[overflow-wrap:anywhere] max-w-[min(38rem,90%)] rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-sm leading-6 whitespace-pre-wrap text-on-primary sm:px-5">
         {message.content}
       </div>
       {message.deliveryStatus === "sending" ? (

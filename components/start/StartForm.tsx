@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { ApiError, startConversation } from "@/lib/api";
 import {
   getConversationPath,
-  persistConversation,
   validateStartConversation,
 } from "@/lib/helpers";
+import { createInitialConversationUiState, persistConversationUiState } from "@/lib/conversation";
 import type {
   StartConversationFieldErrors,
   StartConversationRequest,
@@ -60,7 +60,7 @@ export function StartForm() {
 
     try {
       const conversation = await startConversation(validation.payload);
-      persistConversation(conversation, window.sessionStorage);
+      persistConversationUiState(createInitialConversationUiState(conversation));
       router.push(getConversationPath(conversation.conversation_id));
     } catch (error: unknown) {
       console.error("Unable to start BookingFunnel conversation", error);

@@ -26,7 +26,7 @@ export function ConversationHeader({ conversation }: ConversationHeaderProps) {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-5 text-on-surface">
-              Chatting with Kenzo
+              Qualification with Kenzo
             </p>
             <p className="text-xs leading-4 text-on-surface-variant">
               Lead qualification
@@ -37,7 +37,7 @@ export function ConversationHeader({ conversation }: ConversationHeaderProps) {
 
       <div className="rounded-full border border-outline-variant/50 bg-surface-container-lowest px-3 py-1.5">
         <p className="text-xs font-medium text-on-surface-variant">
-          {conversation.qualification_complete
+          {conversation.conversation_status === "abandoned" ? "Conversation ended" : conversation.conversation_status === "completed" && !conversation.qualification_complete ? "Conversation closed" : conversation.qualification_complete
             ? "Qualification complete"
             : getRemainingQuestionLabel(conversation.remaining_question_count)}
         </p>
